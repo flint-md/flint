@@ -254,18 +254,18 @@ function AppContent() {
               {/* Content */}
               <div className="flex-1 min-h-0 flex">
                 {state.appSettings.editorStyle === 'tiptap' ? (
-                  <div className="flex-1" style={{ overflow: 'auto', background: 'var(--bg-base)' }}>
+                  <div className="flex-1 flex flex-col min-h-0" style={{ background: 'var(--bg-base)' }}>
                     <TiptapEditor noteId={activeNoteId} />
                   </div>
                 ) : (
                   <>
                     {(viewMode === 'edit' || viewMode === 'split') && (
-                      <div className={viewMode === 'split' ? 'w-1/2' : 'flex-1'} style={{ borderRight: viewMode === 'split' ? '1px solid var(--border)' : 'none', overflow: 'auto', background: 'var(--bg-base)' }}>
+                      <div className={`${viewMode === 'split' ? 'w-1/2' : 'flex-1'} flex flex-col min-h-0`} style={{ borderRight: viewMode === 'split' ? '1px solid var(--border)' : 'none', background: 'var(--bg-base)' }}>
                         <Editor noteId={activeNoteId} />
                       </div>
                     )}
                     {(viewMode === 'preview' || viewMode === 'split') && (
-                      <div className={viewMode === 'split' ? 'w-1/2' : 'flex-1'} style={{ overflow: 'auto', background: 'var(--bg-base)' }}>
+                      <div className={`${viewMode === 'split' ? 'w-1/2' : 'flex-1'} flex flex-col min-h-0 flint-note-scroll`} style={{ overflowY: 'auto', background: 'var(--bg-base)' }}>
                         <Preview noteId={activeNoteId} />
                       </div>
                     )}
