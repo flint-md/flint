@@ -8,7 +8,18 @@ let agentProcess = null;
 
 const APP_DIR = __dirname;
 const DIST_FILE = path.join(APP_DIR, 'dist', 'index.html');
-const ICON_FILE = path.join(APP_DIR, 'icon.png');
+
+function getAppIcon() {
+  const candidates = [
+    path.join(APP_DIR, '..', 'public', 'flint-logo.png'),
+    path.join(APP_DIR, '..', 'dist', 'flint-logo.png'),
+    path.join(APP_DIR, 'dist', 'flint-logo.png'),
+    path.join(APP_DIR, 'flint-logo.png'),
+    path.join(APP_DIR, 'icon.png'),
+    path.join(APP_DIR, '..', 'public', 'flint-logo.ico'),
+  ];
+  return candidates.find(p => fs.existsSync(p));
+}
 
 function commandExists(command) {
   const checker = process.platform === 'win32' ? 'where' : 'which';
@@ -113,7 +124,7 @@ function createWindow() {
     minHeight: 600,
     title: 'Flint',
     backgroundColor: '#0a0a0a',
-    icon: fs.existsSync(ICON_FILE) ? ICON_FILE : undefined,
+    icon: getAppIcon(),
     autoHideMenuBar: true,
     show: false,
     webPreferences: {
