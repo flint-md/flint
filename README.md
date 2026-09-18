@@ -81,15 +81,18 @@ Requirements:
 
 >## Development
 >```
->git clone --single-branch --branch <branch-name> https://github.com/Chintanpatel24/flint.git
+>git clone --single-branch --branch <branch-name> https://github.com/flint-md/flint.git
 >```
 
-Installer scripts:
+Installer and update scripts:
 
-- `install.sh` supports both local installs and the `curl ... | bash` one-liner.
-- `install.ps1` supports both local installs and the `irm ... | iex` one-liner.
-- `install.bat` is a compatibility wrapper for `install.ps1`.
-- `uninstall.sh` removes the Linux/macOS install created under `~/.flint`.
+- `install.sh` supports both local installs and the `curl ... | bash` one-liner on Linux/macOS.
+- `install.ps1` supports both local installs and the `irm ... | iex` one-liner on Windows.
+- `install.bat` is a quick-run wrapper for `install.ps1`.
+- `update.sh` / `update.ps1` updates Flint to the latest release while preserving local vaults and notes.
+- `update.bat` is a quick-run wrapper for `update.ps1`.
+- `uninstall.sh` removes the Linux/macOS installation created under `~/.flint`.
+- `uninstall.ps1` / `uninstall.bat` removes the Windows installation created under `~/.flint`.
 
 ## Aim
 
