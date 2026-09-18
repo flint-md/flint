@@ -10,3 +10,5 @@ agent/agent.spec
 build/
 temp_asar/
 electron_log.txt
+__pycache__/
+*.pyc
