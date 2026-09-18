@@ -62,6 +62,20 @@ export async function fetchOllamaModels(url: string): Promise<string[]> {
   return [];
 }
 
+export interface AgentHealthReport {
+  agentRunning: boolean;
+  agentUrl: string;
+  agentVersion?: string;
+  pythonVersion?: string;
+  ollamaConnected: boolean;
+  ollamaUrl?: string;
+  ollamaModels?: string[];
+  ollamaError?: string;
+  capabilities?: string[];
+  latencyMs: number;
+  message: string;
+}
+
 export async function checkAgentStatus(): Promise<boolean> {
   try {
     const res = await Promise.race([
@@ -73,6 +87,80 @@ export async function checkAgentStatus(): Promise<boolean> {
     return false;
   }
 }
+
+export async function checkAgentHealthDetails(customOllamaUrl?: string): Promise<AgentHealthReport> {
+  const start = Date.now();
+  try {
+    const res = await Promise.race([
+      fetch(`${AGENT_URL}/health`),
+      timeout(4000),
+    ]) as Response;
+
+    const latencyMs = Date.now() - start;
+    if (res.ok) {
+      const data = await res.json();
+      const ollamaConnected = data.ollama?.connected ?? false;
+      const modelCount = data.ollama?.models?.length ?? 0;
+      return {
+        agentRunning: true,
+        agentUrl: AGENT_URL,
+        agentVersion: data.version,
+        pythonVersion: data.python_version,
+        ollamaConnected,
+        ollamaUrl: data.ollama?.url,
+        ollamaModels: data.ollama?.models ?? [],
+        ollamaError: data.ollama?.error,
+        capabilities: data.capabilities ?? [],
+        latencyMs,
+        message: ollamaConnected
+          ? `Agent is healthy and connected to Ollama (${modelCount} model${modelCount === 1 ? '' : 's'} available).`
+          : `Python agent is active, but Ollama was not detected on ${data.ollama?.url || DEFAULT_OLLAMA}. Start Ollama if you wish to use local LLMs.`,
+      };
+    }
+
+    return {
+      agentRunning: false,
+      agentUrl: AGENT_URL,
+      ollamaConnected: false,
+      latencyMs,
+      message: `Agent returned HTTP error ${res.status}.`,
+    };
+  } catch {
+    const latencyMs = Date.now() - start;
+    // Check if Ollama is running directly
+    try {
+      const ollamaUrl = customOllamaUrl || DEFAULT_OLLAMA;
+      const oRes = await Promise.race([
+        fetch(`${ollamaUrl}/api/tags`),
+        timeout(2500),
+      ]) as Response;
+      if (oRes.ok) {
+        const oData = await oRes.json();
+        const models = (oData.models || []).map((m: { name: string }) => m.name);
+        return {
+          agentRunning: false,
+          agentUrl: AGENT_URL,
+          ollamaConnected: true,
+          ollamaUrl,
+          ollamaModels: models,
+          latencyMs,
+          message: `Python agent is offline on port 5100, but Ollama is running directly on ${ollamaUrl} with ${models.length} model(s). Run 'npm run agent' for vault memory features.`,
+        };
+      }
+    } catch {
+      // Ollama also offline
+    }
+
+    return {
+      agentRunning: false,
+      agentUrl: AGENT_URL,
+      ollamaConnected: false,
+      latencyMs,
+      message: `Python agent is not running (http://127.0.0.1:5100). Run 'npm run agent' in your terminal to start the agent.`,
+    };
+  }
+}
+
 
 // ── Memory Context Preview ─────────────────────────────────
 

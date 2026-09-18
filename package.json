@@ -10,7 +10,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "package": "node scripts/build-app.js"
+    "package": "node scripts/build-app.js",
+    "agent": "python agent/agent.py",
+    "test:agent": "python agent/test_agent.py"
   },
   "dependencies": {
     "@tiptap/pm": "^3.27.1",

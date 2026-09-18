@@ -28,6 +28,46 @@ AGENT_PORT = 5100
 
 # ── Health Check ──────────────────────────────────────────────
 
+@app.route("/health", methods=["GET"])
+def health():
+    """Detailed health check for Flint Python Agent and backends"""
+    ollama_ok = False
+    models = []
+    ollama_error = None
+    try:
+        r = requests.get(f"{OLLAMA_URL}/api/tags", timeout=1)
+        if r.ok:
+            ollama_ok = True
+            data = r.json()
+            models = [m["name"] for m in data.get("models", [])]
+        else:
+            ollama_error = f"HTTP {r.status_code}"
+    except Exception as e:
+        ollama_error = str(e)
+
+    return jsonify({
+        "status": "healthy",
+        "agent": "flint",
+        "version": "1.0.0",
+        "python_version": sys.version.split()[0],
+        "ollama": {
+            "connected": ollama_ok,
+            "url": OLLAMA_URL,
+            "models": models,
+            "error": ollama_error if not ollama_ok else None
+        },
+        "capabilities": [
+            "chat",
+            "search_notes",
+            "create_note",
+            "append_to_note",
+            "edit_note",
+            "summarize",
+            "memory"
+        ]
+    })
+
+
 @app.route("/status", methods=["GET"])
 def status():
     """Check if Ollama is running"""
@@ -36,10 +76,10 @@ def status():
         if r.ok:
             data = r.json()
             models = [m["name"] for m in data.get("models", [])]
-            return jsonify({"status": "connected", "models": models, "agent": "flint"})
-        return jsonify({"status": "disconnected", "models": [], "agent": "flint"})
+            return jsonify({"status": "connected", "models": models, "agent": "flint", "healthy": True})
+        return jsonify({"status": "disconnected", "models": [], "agent": "flint", "healthy": True})
     except Exception:
-        return jsonify({"status": "disconnected", "models": [], "agent": "flint"})
+        return jsonify({"status": "disconnected", "models": [], "agent": "flint", "healthy": True})
 
 
 @app.route("/models", methods=["GET"])

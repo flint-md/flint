@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useStore } from '../store';
-import { askFlintAI, fetchOllamaModels, checkOllamaStatus, checkAgentStatus } from '../services/ollama';
+import { askFlintAI, fetchOllamaModels, checkOllamaStatus, checkAgentStatus, checkAgentHealthDetails, type AgentHealthReport } from '../services/ollama';
 import { FlintLogo } from './FlintLogo';
-import { X, Send, Trash2, User, Loader2, Settings, Wifi, Globe, Brain, BookOpen, Network, Sparkles, Zap, Cpu, Server, AlertTriangle } from 'lucide-react';
+import { X, Send, Trash2, User, Loader2, Settings, Wifi, Globe, Brain, BookOpen, Network, Sparkles, Zap, Cpu, Server, AlertTriangle, Activity, CheckCircle2, XCircle, RefreshCw } from 'lucide-react';
 import type { AIAction } from '../types';
 import { useTranslation } from 'react-i18next';
 
@@ -16,8 +16,11 @@ export function AIChat() {
   const [ollamaStatus, setOllamaStatus] = useState<'connected' | 'disconnected'>('disconnected');
   const [models, setModels] = useState<string[]>([]);
   const [showConfig, setShowConfig] = useState(false);
+  const [healthReport, setHealthReport] = useState<AgentHealthReport | null>(null);
+  const [isCheckingHealth, setIsCheckingHealth] = useState(false);
   const [contextPreview, setContextPreview] = useState<string | null>(null);
   const [memoryStats, setMemoryStats] = useState({ notes: 0, connections: 0, tags: 0 });
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef(false);
@@ -232,6 +235,24 @@ export function AIChat() {
     }
   };
 
+  const runHealthCheck = async () => {
+    setIsCheckingHealth(true);
+    try {
+      const report = await checkAgentHealthDetails(aiSettings.ollamaUrl);
+      setHealthReport(report);
+    } catch (err: any) {
+      setHealthReport({
+        agentRunning: false,
+        agentUrl: 'http://127.0.0.1:5100',
+        ollamaConnected: false,
+        latencyMs: 0,
+        message: err?.message || 'Failed to perform health check',
+      });
+    } finally {
+      setIsCheckingHealth(false);
+    }
+  };
+
   const isAgentMode = agentStatus === 'agent-up';
   const isOllamaMode = isAgentMode && aiSettings.provider === 'ollama' && ollamaStatus === 'connected' && !!aiSettings.model;
   const isCloudMode = isAgentMode && isApiProvider && hasApiConfig;
@@ -404,6 +425,95 @@ export function AIChat() {
               {aiSettings.internetAccess ? t('ai.enabled') : t('ai.disabled')}
             </span>
           </ConfigField>
+
+          {/* Diagnostics / Health Check */}
+          <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #282f3a' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ fontSize: 10, fontWeight: 600, color: '#96a1b2', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Activity size={12} style={{ color: '#5b8bf7' }} />
+                Agent Health & Diagnostics
+              </span>
+              <button
+                type="button"
+                onClick={runHealthCheck}
+                disabled={isCheckingHealth}
+                style={{
+                  fontSize: 10,
+                  padding: '4px 8px',
+                  borderRadius: 4,
+                  background: isCheckingHealth ? '#232934' : '#283244',
+                  border: '1px solid #3c4960',
+                  color: '#cad5e2',
+                  cursor: isCheckingHealth ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  transition: 'background 0.15s ease',
+                }}
+              >
+                {isCheckingHealth ? <Loader2 size={10} className="animate-spin" /> : <RefreshCw size={10} />}
+                {isCheckingHealth ? 'Diagnosing...' : 'Check Health'}
+              </button>
+            </div>
+
+            {healthReport && (
+              <div style={{
+                background: '#13161c',
+                borderRadius: 6,
+                padding: '8px 10px',
+                border: '1px solid #29303c',
+                fontSize: 10,
+                color: '#abb7c7',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 5,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    {healthReport.agentRunning ? (
+                      <CheckCircle2 size={12} style={{ color: '#4ade80' }} />
+                    ) : (
+                      <XCircle size={12} style={{ color: '#f87171' }} />
+                    )}
+                    <strong style={{ color: healthReport.agentRunning ? '#86efac' : '#fca5a5' }}>
+                      Python Agent: {healthReport.agentRunning ? 'Running' : 'Offline'}
+                    </strong>
+                  </span>
+                  <span style={{ fontSize: 9, color: '#687385' }}>{healthReport.latencyMs}ms</span>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 16 }}>
+                  {healthReport.ollamaConnected ? (
+                    <CheckCircle2 size={11} style={{ color: '#4ade80' }} />
+                  ) : (
+                    <AlertTriangle size={11} style={{ color: '#fbbf24' }} />
+                  )}
+                  <span>
+                    Ollama Backend: {healthReport.ollamaConnected ? `Connected (${healthReport.ollamaModels?.length || 0} models)` : 'Not Connected'}
+                  </span>
+                </div>
+
+                {healthReport.agentVersion && (
+                  <div style={{ fontSize: 9, color: '#7a8799', marginLeft: 16 }}>
+                    Version: v{healthReport.agentVersion} | Python: {healthReport.pythonVersion || 'N/A'}
+                  </div>
+                )}
+
+                <div style={{
+                  marginTop: 3,
+                  fontSize: 9.5,
+                  padding: '5px 7px',
+                  borderRadius: 4,
+                  background: healthReport.agentRunning ? '#18241e' : '#271b1b',
+                  border: `1px solid ${healthReport.agentRunning ? '#284634' : '#572b2b'}`,
+                  color: healthReport.agentRunning ? '#a3e4be' : '#fca5a5',
+                  lineHeight: 1.35,
+                }}>
+                  {healthReport.message}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
