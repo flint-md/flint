@@ -2,12 +2,14 @@
   <img src="public/flint-logo.png" alt="Flint logo" style="width: 15%; height: auto;">
   <br>
 
-  ![Flint](https://img.shields.io/badge/version-2.0.2-amber?style=flat-square)
+ ![Flint](https://img.shields.io/badge/version-2.0.2-amber?style=flat-square)
   ![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)
   ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-blue?style=flat-square)
+![Issues](https://img.shields.io/badge/issues-3%20open-orange?style=flat-square)
+![PRs](https://img.shields.io/badge/PRs-welcome-blueviolet?style=flat-square)
+
 </div>
 
-# ***Flint***
 - Flint is a secure, local-first knowledge base with markdown notes, linked-note navigation, a visual graph, an infinite canvas, and optional AI assistance through local services.
 
 https://github.com/user-attachments/assets/8f570dfe-9b1c-4076-8c05-b6f0e0d29be1
