@@ -173,8 +173,10 @@ export function TiptapEditor({ noteId }: { noteId: string }) {
   if (!note) return null;
 
   return (
-    <div className="flex-1 min-h-0 h-full overflow-y-auto flint-note-scroll" onClick={handleClick}>
-      <EditorContent editor={editor} className="h-full" />
+    <div className="flex-1 min-h-0 overflow-auto flint-note-scroll" onClick={handleClick}>
+      <EditorContent editor={editor} className="min-h-full" />
     </div>
   );
 }
+
+

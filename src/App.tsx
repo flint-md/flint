@@ -265,7 +265,7 @@ function AppContent() {
                       </div>
                     )}
                     {(viewMode === 'preview' || viewMode === 'split') && (
-                      <div className={`${viewMode === 'split' ? 'w-1/2' : 'flex-1'} flex flex-col min-h-0 flint-note-scroll`} style={{ overflowY: 'auto', background: 'var(--bg-base)' }}>
+                      <div className={`${viewMode === 'split' ? 'w-1/2' : 'flex-1'} flex flex-col min-h-0 flint-note-scroll`} style={{ overflow: 'auto', background: 'var(--bg-base)' }}>
                         <Preview noteId={activeNoteId} />
                       </div>
                     )}
@@ -318,3 +318,4 @@ export default function App() {
     </StoreProvider>
   );
 }
+
