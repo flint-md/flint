@@ -145,6 +145,11 @@ function smartBezier(
   return `M ${p1.x} ${p1.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${p2.x} ${p2.y}`;
 }
 
+function isPointInsideCard(mx: number, my: number, card: CanvasCard, padding: number = 0): boolean {
+  return mx >= card.x - padding && mx <= card.x + card.w + padding &&
+         my >= card.y - padding && my <= card.y + card.h + padding;
+}
+
 function findNearestAnchor(
   mx: number, my: number,
   cards: CanvasCard[], excludeId: string,
@@ -152,9 +157,27 @@ function findNearestAnchor(
 ): { cardId: string; side: Side; pt: { x: number; y: number } } | null {
   const sides: Side[] = ['top', 'right', 'bottom', 'left'];
   let best: { cardId: string; side: Side; pt: { x: number; y: number } } | null = null;
-  let bestDist = snapRadius;
+  let bestDist = Infinity;
+
   for (const card of cards) {
-    if (card.id === excludeId || card.id.startsWith('frame')) continue; // Skip frame cards
+    if (card.id === excludeId || card.id.startsWith('frame')) continue;
+
+    // Full-card-body snap: if mouse is inside or near the card, snap to nearest border anchor
+    const isInsideOrNear = isPointInsideCard(mx, my, card, snapRadius);
+    if (!isInsideOrNear) {
+      // Also check traditional radius-based proximity to side midpoints
+      for (const side of sides) {
+        const pt = getSidePt(card, side);
+        const d = Math.hypot(mx - pt.x, my - pt.y);
+        if (d < snapRadius && d < bestDist) {
+          bestDist = d;
+          best = { cardId: card.id, side, pt };
+        }
+      }
+      continue;
+    }
+
+    // Mouse is inside/near the card — find the nearest anchor side
     for (const side of sides) {
       const pt = getSidePt(card, side);
       const d = Math.hypot(mx - pt.x, my - pt.y);
@@ -492,7 +515,11 @@ export function CanvasView() {
   }, [cards, query, state.notes]);
 
   const wikilinkEdges = useMemo(() => {
-    const filteredIds = new Set(filteredCards.map(c => c.id));
+    // Build a map from noteId -> cardId for cards on the canvas
+    const noteIdToCardId = new Map<string, string>();
+    filteredCards.forEach(c => {
+      if (c.type === 'note' && c.noteId) noteIdToCardId.set(c.noteId, c.id);
+    });
     const noteTitleIdMap = new Map(state.notes.map(note => [note.title.toLowerCase(), note.id] as [string, string]));
     const pairs = new Set<string>();
     const list: Array<{ from: string; to: string }> = [];
@@ -502,12 +529,16 @@ export function CanvasView() {
       if (!note) return;
       const matches = note.content.matchAll(/\[\[([^\]|]+?)(?:\|[^\]]+)?\]\]/g);
       for (const match of matches) {
-        const targetId = noteTitleIdMap.get(match[1].toLowerCase());
-        if (!targetId || !filteredIds.has(targetId) || targetId === note.id) continue;
-        const key = [note.id, targetId].sort().join('::');
+        const targetNoteId = noteTitleIdMap.get(match[1].toLowerCase());
+        if (!targetNoteId || targetNoteId === note.id) continue;
+        // Map note IDs to canvas card IDs
+        const fromCardId = noteIdToCardId.get(note.id);
+        const toCardId = noteIdToCardId.get(targetNoteId);
+        if (!fromCardId || !toCardId) continue;
+        const key = [fromCardId, toCardId].sort().join('::');
         if (pairs.has(key)) continue;
         pairs.add(key);
-        list.push({ from: note.id, to: targetId });
+        list.push({ from: fromCardId, to: toCardId });
       }
     });
     return list;
@@ -695,12 +726,12 @@ export function CanvasView() {
         y: e.clientY - canvasDragRef.current.y,
       });
     } else if (connDragRef.current) {
-      // Dragging connection line
+      // Dragging connection line — generous snap radius for full-card detection
       const rect = containerRef.current!.getBoundingClientRect();
       const mx = (e.clientX - rect.left - pan.x) / zoom;
       const my = (e.clientY - rect.top - pan.y) / zoom;
       
-      const anchor = findNearestAnchor(mx, my, filteredCards, connDragRef.current.fromCard, 30 / zoom);
+      const anchor = findNearestAnchor(mx, my, filteredCards, connDragRef.current.fromCard, 40 / zoom);
       if (anchor) {
         connDragRef.current = { ...connDragRef.current, mx: anchor.pt.x, my: anchor.pt.y, toSide: anchor.side };
         setSnapTarget({ cardId: anchor.cardId, side: anchor.side });
@@ -717,8 +748,8 @@ export function CanvasView() {
       const rect = containerRef.current!.getBoundingClientRect();
       const mx = (e.clientX - rect.left - pan.x) / zoom;
       const my = (e.clientY - rect.top - pan.y) / zoom;
-      const anchor = findNearestAnchor(mx, my, filteredCards, connDragRef.current.fromCard, 30 / zoom);
-      if (anchor) {
+      const anchor = findNearestAnchor(mx, my, filteredCards, connDragRef.current.fromCard, 40 / zoom);
+      if (anchor && anchor.cardId !== connDragRef.current.fromCard) {
         pushHistorySnapshot(); // Snapshot connections before adding
         const newConn: CanvasConnection = {
           id: `conn-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -838,15 +869,18 @@ export function CanvasView() {
       const from = findCard(conn.fromCard);
       const to = findCard(conn.toCard);
       if (!from || !to) return;
-      const p1 = getSidePt(from, conn.fromSide);
-      const p2 = getSidePt(to, conn.toSide);
+      // Dynamically recalculate best sides based on current card positions
+      // This prevents Bezier curves from cutting through cards when they move
+      const { fromSide: dynFromSide, toSide: dynToSide } = getBestSides(from, to);
+      const p1 = getSidePt(from, dynFromSide);
+      const p2 = getSidePt(to, dynToSide);
       const color = conn.color || CONN_COLORS[0]; // Soothing steel-blue slate color default
       
       allEdges.push(
         <g key={conn.id}>
           {/* Broad transparent path to capture hover & right-click context menu */}
           <path
-            d={smartBezier(p1, conn.fromSide, p2, conn.toSide)}
+            d={smartBezier(p1, dynFromSide, p2, dynToSide)}
             stroke="transparent"
             strokeWidth={14 / zoom}
             fill="none"
@@ -865,7 +899,7 @@ export function CanvasView() {
           />
           {/* Main visual connection path with toggled arrows markerEnd */}
           <path
-            d={smartBezier(p1, conn.fromSide, p2, conn.toSide)}
+            d={smartBezier(p1, dynFromSide, p2, dynToSide)}
             stroke={color}
             strokeWidth={hoveredConn === conn.id || lineContextMenu?.connId === conn.id ? 2.5 / zoom : 1.8 / zoom}
             fill="none"
