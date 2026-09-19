@@ -127,9 +127,19 @@ def concise_note_reply(notes, query, active_note_id, memory, max_notes=5):
 
 
 def build_concise_system_prompt(system_prompt, memory):
-    if memory and memory != "No relevant notes found.":
-        return f"User's Note Context:\n{memory}\n\nPlease answer the user's question. Use the notes if relevant, but provide general knowledge if the notes do not contain the answer."
-    return "Please answer the user's question clearly and concisely."
+    if memory and memory != "No notes available in the vault yet.":
+        return (
+            f"{system_prompt}\n\n"
+            f"{memory}\n\n"
+            f"IMPORTANT RULES:\n"
+            f"1. You must answer the user's question primarily using the provided Flint Vault Knowledge Base and Note Connections.\n"
+            f"2. If the vault does not contain enough relevant information to answer the question, you must clearly state that the local notes do not contain the answer, rather than inventing facts.\n"
+            f"3. You may use general knowledge to supplement the answer, but you must clearly distinguish between what was found in the user's notes versus general knowledge."
+        )
+    return (
+        f"{system_prompt}\n\n"
+        f"The user's note vault is empty. Please answer the user's question clearly and concisely, but inform them that they have no local notes to search."
+    )
 
 
 def build_edit_prompt(system_prompt, memory, query):
@@ -378,12 +388,18 @@ def build_memory(notes, active_note_id, query, max_notes=10):
 
     # Connection map
     lines.append("=== MEMORY MAP (Note Connections) ===")
-    for nid in sorted(graph, key=lambda x: len(graph[x]), reverse=True):
-        if graph[nid]:
+    
+    # Only include graph connections for relevant notes to avoid blowing up context
+    map_nodes = set(selected_ids)
+    if active_note_id:
+        map_nodes.add(active_note_id)
+        
+    for nid in sorted(map_nodes, key=lambda x: len(graph.get(x, set())), reverse=True):
+        if graph.get(nid) and nid in note_map:
             conn_names = [note_map[cid]["title"] for cid in graph[nid] if cid in note_map]
             if conn_names:
                 quoted_conn_names = [f'"{cn}"' for cn in conn_names]
-                lines.append(f'"{note_map[nid]["title"]}" → {", ".join(quoted_conn_names)}')
+                lines.append(f'"{note_map[nid]["title"]}" <-> {", ".join(quoted_conn_names)}')
     lines.append("")
 
     # Active note
