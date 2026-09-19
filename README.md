@@ -18,22 +18,21 @@ https://github.com/user-attachments/assets/8f570dfe-9b1c-4076-8c05-b6f0e0d29be1
 Linux and macOS:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Chintanpatel24/flint/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/flint-md/flint/main/install.sh | bash
 ```
 
 Windows PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/Chintanpatel24/flint/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/flint-md/flint/main/install.ps1 | iex
 ```
 
-The installer builds Flint from source, installs an Electron desktop runtime, adds the Flint logo to the app entry, and creates a launcher. Flint opens as a desktop application, not as a browser-hosted local web page.
+The installer automatically checks for official prebuilt desktop binaries (AppImage/exe) for instant 5-second installation. If binaries are not available for the target platform or when running from source, it configures an optimized desktop runtime with native shell icons and launcher integration.
 
 Requirements:
 
-- Node.js 18 or newer
-- npm
-- Python 3 for the optional AI agent
+- Node.js 18 or newer (only needed when building from source or running in dev mode)
+- Python 3 (optional, for the local AI agent)
 - Ollama for local model chat, for example `ollama pull llama3.2`
 
 ## Features
@@ -84,15 +83,35 @@ Requirements:
 >git clone --single-branch --branch <branch-name> https://github.com/flint-md/flint.git
 >```
 
-Installer and update scripts:
+Installer, update, and uninstaller scripts:
 
-- `install.sh` supports both local installs and the `curl ... | bash` one-liner on Linux/macOS.
-- `install.ps1` supports both local installs and the `irm ... | iex` one-liner on Windows.
-- `install.bat` is a quick-run wrapper for `install.ps1`.
-- `update.sh` / `update.ps1` updates Flint to the latest release while preserving local vaults and notes.
-- `update.bat` is a quick-run wrapper for `update.ps1`.
-- `uninstall.sh` removes the Linux/macOS installation created under `~/.flint`.
-- `uninstall.ps1` / `uninstall.bat` removes the Windows installation created under `~/.flint`.
+- `install.sh`: Linux/macOS installer supporting prebuilt binaries, fast local installs, and `curl ... | bash`.
+- `install.ps1`: Windows installer supporting prebuilt binaries, fast local installs, and `irm ... | iex`.
+- `install.bat`: Quick-run Windows wrapper for `install.ps1`.
+- `update.sh` / `update.ps1`: Updates Flint to the latest release while preserving your local vaults and notes.
+- `update.bat`: Quick-run Windows wrapper for `update.ps1`.
+- `uninstall.sh`: Uninstalls Flint on Linux/macOS. Run via `flint-uninstall` from terminal or `~/.flint/uninstall.sh`.
+- `uninstall.ps1` / `uninstall.bat`: Uninstalls Flint on Windows. Run via `flint-uninstall` from terminal or `%USERPROFILE%\.flint\uninstall.bat`.
+
+### Uninstall
+
+To uninstall Flint anytime from terminal:
+
+```bash
+flint-uninstall
+```
+
+Or run via one-liner:
+
+Linux and macOS:
+```bash
+curl -fsSL https://raw.githubusercontent.com/flint-md/flint/main/uninstall.sh | bash
+```
+
+Windows PowerShell:
+```powershell
+irm https://raw.githubusercontent.com/flint-md/flint/main/uninstall.ps1 | iex
+```
 
 ## Aim
 
