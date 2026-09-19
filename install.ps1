@@ -2,6 +2,7 @@
 param(
   [switch]$Yes,
   [switch]$NonInteractive,
+  [switch]$BuildFromSource,
   [string]$SourceDir,
   [string]$Branch,
   [string]$InstallDir
@@ -67,7 +68,7 @@ function Ask-User($Prompt, $Default) {
 
 function Copy-DirectoryContents($Source, $Destination) {
   New-Item -ItemType Directory -Force -Path $Destination | Out-Null
-  $excludedNames = @("node_modules", "dist", "dist_electron", ".git", ".build", "venv", "__pycache__", ".vscode", "temp_asar", "electron_log.txt")
+  $excludedNames = @("node_modules", "dist_electron", ".git", ".build", "venv", "__pycache__", ".vscode", "temp_asar", "electron_log.txt")
   Get-ChildItem -Force -LiteralPath $Source | ForEach-Object {
     if ($_.Name -in $excludedNames -or $_.Name.EndsWith(".pyc")) {
       return
@@ -171,12 +172,14 @@ Copy-DirectoryContents $SourceCache $BuildDir
 
 Push-Location $BuildDir
 try {
-  # Check if prebuilt dist exists in local source
-  $hasPrebuilt = $LocalSource -and (Test-Path (Join-Path $LocalSource "dist\index.html"))
-  if ($hasPrebuilt -and (Ask-User "Prebuilt bundle found in local source. Reuse existing build for faster install?" "y")) {
-    New-Item -ItemType Directory -Force -Path (Join-Path $BuildDir "dist") | Out-Null
-    Copy-Item -LiteralPath (Join-Path $LocalSource "dist\*") -Destination (Join-Path $BuildDir "dist") -Recurse -Force
-    Write-Ok "Reusing prebuilt bundle from local source"
+  # Check if prebuilt dist exists in source cache or local source
+  $hasPrebuilt = (Test-Path (Join-Path $BuildDir "dist\index.html")) -or (Test-Path (Join-Path $SourceCache "dist\index.html"))
+  if ($hasPrebuilt -and (-not $BuildFromSource)) {
+    if (-not (Test-Path (Join-Path $BuildDir "dist\index.html"))) {
+      New-Item -ItemType Directory -Force -Path (Join-Path $BuildDir "dist") | Out-Null
+      Copy-Item -LiteralPath (Join-Path $SourceCache "dist\*") -Destination (Join-Path $BuildDir "dist") -Recurse -Force
+    }
+    Write-Ok "Reusing prebuilt bundle from source (fast-path)"
   } else {
     Write-Host "      Installing dependencies with npm..."
     if (Test-Path "package-lock.json") {
@@ -273,10 +276,24 @@ Copy-Item -LiteralPath (Join-Path $BuildDir "dist") -Destination (Join-Path $Fli
 $LogoIco = Join-Path $BuildDir "public\flint-logo.ico"
 if (Test-Path $LogoIco) {
   Copy-Item -LiteralPath $LogoIco -Destination (Join-Path $FlintApp "icon.ico") -Force
+  Copy-Item -LiteralPath $LogoIco -Destination (Join-Path $FlintApp "flint-logo.ico") -Force
 }
 $LogoPng = Join-Path $BuildDir "public\flint-logo.png"
 if (Test-Path $LogoPng) {
   Copy-Item -LiteralPath $LogoPng -Destination (Join-Path $FlintApp "icon.png") -Force
+  Copy-Item -LiteralPath $LogoPng -Destination (Join-Path $FlintApp "flint-logo.png") -Force
+}
+
+# Deploy uninstaller scripts
+$UninstallerPs1 = Join-Path $BuildDir "uninstall.ps1"
+if (-not (Test-Path $UninstallerPs1)) { $UninstallerPs1 = Join-Path $SourceCache "uninstall.ps1" }
+if (Test-Path $UninstallerPs1) {
+  Copy-Item -LiteralPath $UninstallerPs1 -Destination (Join-Path $FlintHome "uninstall.ps1") -Force
+}
+$UninstallerBat = Join-Path $BuildDir "uninstall.bat"
+if (-not (Test-Path $UninstallerBat)) { $UninstallerBat = Join-Path $SourceCache "uninstall.bat" }
+if (Test-Path $UninstallerBat) {
+  Copy-Item -LiteralPath $UninstallerBat -Destination (Join-Path $FlintHome "uninstall.bat") -Force
 }
 
 if ($InstallElectron) {
@@ -340,6 +357,22 @@ if not exist "$VenvPython" (
 "@
 Set-Content -LiteralPath $AgentLauncher -Value $AgentLauncherBody -Encoding ASCII
 
+# Create uninstaller command wrapper
+$UninstallLauncher = Join-Path $FlintBin "flint-uninstall.cmd"
+$UninstallLauncherBody = @"
+@echo off
+set "FLINT_HOME=$FlintHome"
+if exist "%FLINT_HOME%\uninstall.bat" (
+  call "%FLINT_HOME%\uninstall.bat" %*
+) else if exist "%FLINT_HOME%\uninstall.ps1" (
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%FLINT_HOME%\uninstall.ps1" %*
+) else (
+  echo Flint uninstaller not found at %FLINT_HOME%\uninstall.bat 1>&2
+  exit /b 1
+)
+"@
+Set-Content -LiteralPath $UninstallLauncher -Value $UninstallLauncherBody -Encoding ASCII
+
 # Start Menu Shortcut
 $StartMenu = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs"
 New-Item -ItemType Directory -Force -Path $StartMenu | Out-Null
@@ -351,8 +384,11 @@ try {
   $Shortcut.WorkingDirectory = $FlintBin
   $IconIco = Join-Path $FlintApp "icon.ico"
   $IconPng = Join-Path $FlintApp "icon.png"
-  if (Test-Path $IconIco) { $Shortcut.IconLocation = $IconIco }
-  elseif (Test-Path $IconPng) { $Shortcut.IconLocation = $IconPng }
+  if (Test-Path $IconIco) {
+    $Shortcut.IconLocation = "$IconIco,0"
+  } elseif (Test-Path $IconPng) {
+    $Shortcut.IconLocation = $IconPng
+  }
   $Shortcut.Description = "Flint local-first knowledge base with AI"
   $Shortcut.Save()
   Write-Ok "Start Menu shortcut created"
@@ -392,5 +428,6 @@ Write-Host "  AI Agent Launcher (Optional):" -ForegroundColor White
 Write-Host "    - flint-agent"
 Write-Host ""
 Write-Host "  To uninstall anytime:" -ForegroundColor White
-Write-Host "    - Run: $FlintHome\uninstall.bat (or uninstall.ps1)"
+Write-Host "    - Terminal Command: flint-uninstall"
+Write-Host "    - Direct Script:    $FlintHome\uninstall.bat"
 Write-Host ""

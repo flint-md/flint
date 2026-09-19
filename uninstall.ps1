@@ -44,6 +44,9 @@ Get-Process -Name "flint", "flint-desktop" -ErrorAction SilentlyContinue | Stop-
 Get-Process -Name "electron" -ErrorAction SilentlyContinue | Where-Object {
   $_.Path -and ($_.Path -like "*$FlintHome*" -or $_.Path -like "*flint*")
 } | Stop-Process -Force -ErrorAction SilentlyContinue
+Get-Process -Name "python", "python3" -ErrorAction SilentlyContinue | Where-Object {
+  $_.Path -and ($_.Path -like "*$FlintHome*")
+} | Stop-Process -Force -ErrorAction SilentlyContinue
 Write-Host "      OK  Processes stopped" -ForegroundColor Green
 
 Write-Host "[2/4] Removing Start Menu shortcuts..." -ForegroundColor Cyan
@@ -74,6 +77,8 @@ if ($keepNotes) {
   Remove-Item -Recurse -Force -LiteralPath (Join-Path $FlintHome "source") -ErrorAction SilentlyContinue
   Remove-Item -Recurse -Force -LiteralPath (Join-Path $FlintHome ".build") -ErrorAction SilentlyContinue
   Remove-Item -Recurse -Force -LiteralPath (Join-Path $FlintHome "venv") -ErrorAction SilentlyContinue
+  Remove-Item -Force -LiteralPath (Join-Path $FlintHome "uninstall.bat") -ErrorAction SilentlyContinue
+  Remove-Item -Force -LiteralPath (Join-Path $FlintHome "uninstall.ps1") -ErrorAction SilentlyContinue
   Write-Host "      OK  Flint app removed. Vault data preserved at $FlintHome" -ForegroundColor Green
 } else {
   Remove-Item -Recurse -Force -LiteralPath $FlintHome -ErrorAction SilentlyContinue

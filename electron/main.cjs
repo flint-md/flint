@@ -6,16 +6,35 @@ const { spawn, spawnSync } = require('child_process');
 let mainWindow = null;
 let agentProcess = null;
 
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.flint.app');
+}
+
 const APP_DIR = __dirname;
-const DIST_FILE = path.join(APP_DIR, 'dist', 'index.html');
+const DIST_FILE = fs.existsSync(path.join(APP_DIR, 'dist', 'index.html'))
+  ? path.join(APP_DIR, 'dist', 'index.html')
+  : path.join(APP_DIR, '..', 'dist', 'index.html');
 
 function getAppIcon() {
-  const candidates = [
-    path.join(APP_DIR, '..', 'public', 'flint-logo.png'),
-    path.join(APP_DIR, '..', 'dist', 'flint-logo.png'),
+  const isWindows = process.platform === 'win32';
+  const candidates = isWindows ? [
+    path.join(APP_DIR, 'icon.ico'),
+    path.join(APP_DIR, 'flint-logo.ico'),
+    path.join(APP_DIR, 'public', 'flint-logo.ico'),
+    path.join(APP_DIR, '..', 'public', 'flint-logo.ico'),
     path.join(APP_DIR, 'dist', 'flint-logo.png'),
-    path.join(APP_DIR, 'flint-logo.png'),
     path.join(APP_DIR, 'icon.png'),
+    path.join(APP_DIR, 'flint-logo.png'),
+    path.join(APP_DIR, '..', 'dist', 'flint-logo.png'),
+    path.join(APP_DIR, '..', 'public', 'flint-logo.png'),
+  ] : [
+    path.join(APP_DIR, 'icon.png'),
+    path.join(APP_DIR, 'flint-logo.png'),
+    path.join(APP_DIR, 'dist', 'flint-logo.png'),
+    path.join(APP_DIR, '..', 'dist', 'flint-logo.png'),
+    path.join(APP_DIR, 'public', 'flint-logo.png'),
+    path.join(APP_DIR, '..', 'public', 'flint-logo.png'),
+    path.join(APP_DIR, 'icon.ico'),
     path.join(APP_DIR, '..', 'public', 'flint-logo.ico'),
   ];
   return candidates.find(p => fs.existsSync(p));

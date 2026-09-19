@@ -14,6 +14,7 @@ FLINT_VENV="$FLINT_HOME/venv"
 
 YES_MODE=false
 NON_INTERACTIVE=false
+BUILD_FROM_SOURCE=false
 LOCAL_SOURCE_OVERRIDE=""
 
 while [[ $# -gt 0 ]]; do
@@ -24,6 +25,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --non-interactive)
       NON_INTERACTIVE=true
+      shift
+      ;;
+    --build-from-source)
+      BUILD_FROM_SOURCE=true
       shift
       ;;
     --source-dir)
@@ -138,6 +143,105 @@ check_python() {
   fi
 }
 
+try_binary_install() {
+  if [ "$BUILD_FROM_SOURCE" = true ] || [ -n "$LOCAL_SOURCE_OVERRIDE" ]; then
+    return 1
+  fi
+
+  if ! have curl; then
+    return 1
+  fi
+
+  local arch os
+  arch="$(uname -m)"
+  os="$(uname -s)"
+  if [ "$os" != "Linux" ] || [ "$arch" != "x86_64" ]; then
+    return 1
+  fi
+
+  step 1 "Checking for official pre-packaged Flint desktop binary"
+  local api_url="https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/latest"
+  local release_json
+  release_json="$(curl -fsSL -H "User-Agent: Flint-Installer" "$api_url" 2>/dev/null || true)"
+
+  if [ -z "$release_json" ]; then
+    return 1
+  fi
+
+  local appimage_url
+  appimage_url="$(printf "%s" "$release_json" | grep -o '"browser_download_url": *"[^"]*\.AppImage"' | head -n 1 | cut -d '"' -f 4 || true)"
+
+  if [ -z "$appimage_url" ]; then
+    ok "No standalone AppImage on latest release, falling back to fast prebuilt runtime"
+    return 1
+  fi
+
+  say "      Found standalone Linux AppImage: $appimage_url"
+  mkdir -p "$FLINT_BIN" "$FLINT_APP"
+  say "      Downloading Flint standalone desktop app..."
+  curl -fsSL "$appimage_url" -o "$FLINT_BIN/flint"
+  chmod +x "$FLINT_BIN/flint"
+
+  # Download logo & uninstaller
+  curl -fsSL "https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_BRANCH}/public/flint-logo.png" -o "$FLINT_APP/icon.png" 2>/dev/null || true
+  curl -fsSL "https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_BRANCH}/uninstall.sh" -o "$FLINT_HOME/uninstall.sh" 2>/dev/null || true
+  chmod +x "$FLINT_HOME/uninstall.sh" 2>/dev/null || true
+
+  # XDG icon registration
+  mkdir -p "$HOME/.local/share/icons/hicolor/512x512/apps" 2>/dev/null || true
+  [ -f "$FLINT_APP/icon.png" ] && cp "$FLINT_APP/icon.png" "$HOME/.local/share/icons/hicolor/512x512/apps/flint.png" 2>/dev/null || true
+  have gtk-update-icon-cache && gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
+
+  # Desktop launcher
+  if [ -d "$HOME/.local/share/applications" ] || mkdir -p "$HOME/.local/share/applications" 2>/dev/null; then
+    cat > "$HOME/.local/share/applications/flint.desktop" <<DESKTOP
+[Desktop Entry]
+Name=Flint
+Comment=Local-first knowledge base with AI
+Exec=$FLINT_BIN/flint %U
+Icon=$FLINT_APP/icon.png
+Type=Application
+Categories=Office;Utility;TextEditor;
+Keywords=notes;markdown;knowledge;ai;
+StartupNotify=true
+Terminal=false
+StartupWMClass=Flint
+DESKTOP
+    chmod +x "$HOME/.local/share/applications/flint.desktop"
+    update-desktop-database "$HOME/.local/share/applications" >/dev/null 2>&1 || true
+    ok "Application menu entry created"
+  fi
+
+  # Uninstall command
+  cat > "$FLINT_BIN/flint-uninstall" <<LAUNCHER
+#!/usr/bin/env bash
+set -e
+FLINT_HOME="\${FLINT_HOME:-$FLINT_HOME}"
+if [ -f "\$FLINT_HOME/uninstall.sh" ]; then
+  exec "\$FLINT_HOME/uninstall.sh" "\$@"
+elif [ -f "\$(dirname "\$0")/../uninstall.sh" ]; then
+  exec "\$(dirname "\$0")/../uninstall.sh" "\$@"
+else
+  echo "Flint uninstaller not found at \$FLINT_HOME/uninstall.sh" >&2
+  exit 1
+fi
+LAUNCHER
+  chmod +x "$FLINT_BIN/flint-uninstall"
+
+  case ":$PATH:" in
+    *":$FLINT_BIN:"*) ok "Command available as flint" ;;
+    *)
+      if ! grep -q "$FLINT_BIN" "$HOME/.profile" 2>/dev/null; then
+        printf '\n# Flint\nexport PATH="$HOME/.flint/bin:$PATH"\n' >> "$HOME/.profile"
+      fi
+      ok "Added $FLINT_BIN to PATH"
+      ;;
+  esac
+
+  ok "Pre-packaged binary installed in seconds without Node.js!"
+  return 0
+}
+
 stop_running_instances() {
   step 3 "Checking for running Flint instances"
   if pkill -0 -f "flint-desktop" 2>/dev/null || pkill -0 -f "electron.*flint" 2>/dev/null; then
@@ -172,7 +276,7 @@ resolve_source() {
     mkdir -p "$FLINT_SOURCE_CACHE"
     (
       cd "$local_dir"
-      tar --exclude='./node_modules' --exclude='./dist' --exclude='./dist_electron' --exclude='./.git' --exclude='./venv' --exclude='./__pycache__' -cf - .
+      tar --exclude='./node_modules' --exclude='./dist_electron' --exclude='./.git' --exclude='./venv' --exclude='./__pycache__' -cf - .
     ) | (
       cd "$FLINT_SOURCE_CACHE"
       tar -xf -
@@ -209,17 +313,17 @@ build_frontend() {
   mkdir -p "$BUILD_DIR"
   (
     cd "$FLINT_SOURCE_CACHE"
-    tar --exclude='./node_modules' --exclude='./dist' --exclude='./dist_electron' --exclude='./.git' --exclude='./venv' -cf - .
+    tar --exclude='./node_modules' --exclude='./dist_electron' --exclude='./.git' --exclude='./venv' -cf - .
   ) | (
     cd "$BUILD_DIR"
     tar -xf -
   )
 
   cd "$BUILD_DIR"
-  if [ -f "$FLINT_SOURCE_CACHE/dist/index.html" ] && ask "Prebuilt bundle found in source. Reuse existing build for faster install?" "y"; then
+  if [ -f "$FLINT_SOURCE_CACHE/dist/index.html" ] && [ "$BUILD_FROM_SOURCE" = false ]; then
     mkdir -p "$BUILD_DIR/dist"
     cp -R "$FLINT_SOURCE_CACHE/dist/." "$BUILD_DIR/dist/"
-    ok "Reusing prebuilt bundle from source"
+    ok "Reusing prebuilt bundle from source (fast-path)"
   else
     say "      Installing dependencies with npm..."
     if [ -f package-lock.json ]; then
@@ -301,7 +405,57 @@ install_desktop_app() {
   cp "$BUILD_DIR/electron/main.cjs" "$FLINT_APP/main.cjs"
   rm -rf "$FLINT_APP/dist"
   cp -R "$BUILD_DIR/dist" "$FLINT_APP/dist"
+  
+  # Copy logo assets
   [ -f "$BUILD_DIR/public/flint-logo.png" ] && cp "$BUILD_DIR/public/flint-logo.png" "$FLINT_APP/icon.png"
+  [ -f "$BUILD_DIR/public/flint-logo.png" ] && cp "$BUILD_DIR/public/flint-logo.png" "$FLINT_APP/flint-logo.png"
+  [ -f "$BUILD_DIR/public/flint-logo.ico" ] && cp "$BUILD_DIR/public/flint-logo.ico" "$FLINT_APP/icon.ico"
+  [ -f "$BUILD_DIR/public/flint-logo.ico" ] && cp "$BUILD_DIR/public/flint-logo.ico" "$FLINT_APP/flint-logo.ico"
+
+  # Standard XDG icon registration across all resolutions for desktop environments
+  if [ -f "$FLINT_APP/icon.png" ]; then
+    mkdir -p "$HOME/.local/share/pixmaps" 2>/dev/null || true
+    cp "$FLINT_APP/icon.png" "$HOME/.local/share/pixmaps/flint.png" 2>/dev/null || true
+    cp "$FLINT_APP/icon.png" "$HOME/.local/share/pixmaps/flint-desktop.png" 2>/dev/null || true
+
+    # Generate icons across all standard resolutions
+    if have python3; then
+      python3 -c "
+import os
+from PIL import Image
+try:
+    img = Image.open('$FLINT_APP/icon.png')
+    base = os.path.expanduser('~/.local/share/icons/hicolor')
+    for s in [16, 24, 32, 48, 64, 128, 256, 512]:
+        d = os.path.join(base, f'{s}x{s}', 'apps')
+        os.makedirs(d, exist_ok=True)
+        r = img.resize((s, s), Image.Resampling.LANCZOS)
+        r.save(os.path.join(d, 'flint.png'))
+        r.save(os.path.join(d, 'flint-desktop.png'))
+except Exception:
+    pass
+" 2>/dev/null || true
+    else
+      for s in 16 24 32 48 64 128 256 512; do
+        mkdir -p "$HOME/.local/share/icons/hicolor/${s}x${s}/apps" 2>/dev/null || true
+        cp "$FLINT_APP/icon.png" "$HOME/.local/share/icons/hicolor/${s}x${s}/apps/flint.png" 2>/dev/null || true
+        cp "$FLINT_APP/icon.png" "$HOME/.local/share/icons/hicolor/${s}x${s}/apps/flint-desktop.png" 2>/dev/null || true
+      done
+    fi
+
+    if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+      gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
+    fi
+  fi
+
+  # Deploy uninstaller
+  if [ -f "$BUILD_DIR/uninstall.sh" ]; then
+    cp "$BUILD_DIR/uninstall.sh" "$FLINT_HOME/uninstall.sh"
+    chmod +x "$FLINT_HOME/uninstall.sh"
+  elif [ -f "$FLINT_SOURCE_CACHE/uninstall.sh" ]; then
+    cp "$FLINT_SOURCE_CACHE/uninstall.sh" "$FLINT_HOME/uninstall.sh"
+    chmod +x "$FLINT_HOME/uninstall.sh"
+  fi
 
   cat > "$FLINT_APP/package.json" <<'JSON'
 {
@@ -355,22 +509,39 @@ exec "$agent_python" "$FLINT_HOME/agent/agent.py" "\$@"
 AGENT
   chmod +x "$FLINT_BIN/flint-agent"
 
+  # Uninstaller CLI wrapper
+  cat > "$FLINT_BIN/flint-uninstall" <<LAUNCHER
+#!/usr/bin/env bash
+set -e
+FLINT_HOME="\${FLINT_HOME:-$FLINT_HOME}"
+if [ -f "\$FLINT_HOME/uninstall.sh" ]; then
+  exec "\$FLINT_HOME/uninstall.sh" "\$@"
+elif [ -f "\$(dirname "\$0")/../uninstall.sh" ]; then
+  exec "\$(dirname "\$0")/../uninstall.sh" "\$@"
+else
+  echo "Flint uninstaller not found at \$FLINT_HOME/uninstall.sh" >&2
+  exit 1
+fi
+LAUNCHER
+  chmod +x "$FLINT_BIN/flint-uninstall"
+
   if [ -d "$HOME/.local/share/applications" ] || mkdir -p "$HOME/.local/share/applications" 2>/dev/null; then
-    icon_path="$FLINT_APP/icon.png"
     cat > "$HOME/.local/share/applications/flint.desktop" <<DESKTOP
 [Desktop Entry]
 Name=Flint
 Comment=Local-first knowledge base with AI
 Exec=$FLINT_BIN/flint %U
-Icon=$icon_path
+Icon=flint
 Type=Application
 Categories=Office;Utility;TextEditor;
 Keywords=notes;markdown;knowledge;ai;
 StartupNotify=true
 Terminal=false
-StartupWMClass=Flint
+StartupWMClass=flint-desktop
 DESKTOP
     chmod +x "$HOME/.local/share/applications/flint.desktop"
+    cp "$HOME/.local/share/applications/flint.desktop" "$HOME/.local/share/applications/flint-desktop.desktop"
+    chmod +x "$HOME/.local/share/applications/flint-desktop.desktop"
     update-desktop-database "$HOME/.local/share/applications" >/dev/null 2>&1 || true
     ok "Application menu entry created"
   fi
@@ -394,9 +565,14 @@ cleanup() {
 
 main() {
   print_header
+  stop_running_instances
+
+  if try_binary_install; then
+    return 0
+  fi
+
   check_node
   check_python
-  stop_running_instances
   resolve_source
   prepare_install_dir
   build_frontend
@@ -419,7 +595,8 @@ main() {
   say "    - flint-agent"
   say ""
   say "  To uninstall anytime:"
-  say "    - Run: $FLINT_HOME/uninstall.sh"
+  say "    - Terminal command:  flint-uninstall"
+  say "    - Direct script:     $FLINT_HOME/uninstall.sh"
   say ""
 }
 
