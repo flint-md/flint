@@ -104,7 +104,7 @@ export function TiptapEditor({ noteId }: { noteId: string }) {
       style.id = styleId;
       style.textContent = `
         .flint-tiptap-editor {
-          width: 100%; height: 100%;
+          width: 100%; min-height: 100%;
           background: linear-gradient(180deg, rgba(255,255,255,0.015), transparent 240px);
           color: var(--text);
           border: none; outline: none; resize: none;
@@ -173,8 +173,10 @@ export function TiptapEditor({ noteId }: { noteId: string }) {
   if (!note) return null;
 
   return (
-    <div className="flex-1 min-h-0 h-full overflow-auto" onClick={handleClick}>
-      <EditorContent editor={editor} className="h-full" />
+    <div className="flex-1 min-h-0 overflow-auto flint-note-scroll" onClick={handleClick}>
+      <EditorContent editor={editor} className="min-h-full" />
     </div>
   );
 }
+
+

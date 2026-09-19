@@ -167,10 +167,56 @@ html, body, #root {
     var(--bg-base);
 }
 
-::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar { width: 9px; height: 9px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #222; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #333; }
+::-webkit-scrollbar-thumb { background: #2e2e32; border-radius: 5px; border: 2px solid transparent; background-clip: padding-box; min-height: 36px; }
+::-webkit-scrollbar-thumb:hover { background: #505058; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:active { background: #7c7c88; background-clip: padding-box; }
+
+.flint-note-scroll,
+.flint-editor,
+.flint-preview {
+  scrollbar-width: thin;
+  scrollbar-color: #3e3e44 transparent;
+}
+
+.flint-note-scroll::-webkit-scrollbar,
+.flint-editor::-webkit-scrollbar,
+.flint-preview::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.flint-note-scroll::-webkit-scrollbar-track,
+.flint-editor::-webkit-scrollbar-track,
+.flint-preview::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+  border-left: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.flint-note-scroll::-webkit-scrollbar-thumb,
+.flint-editor::-webkit-scrollbar-thumb,
+.flint-preview::-webkit-scrollbar-thumb {
+  background: #3e3e44;
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  min-height: 40px;
+}
+
+.flint-note-scroll::-webkit-scrollbar-thumb:hover,
+.flint-editor::-webkit-scrollbar-thumb:hover,
+.flint-preview::-webkit-scrollbar-thumb:hover {
+  background: #5e5e68;
+  background-clip: padding-box;
+}
+
+.flint-note-scroll::-webkit-scrollbar-thumb:active,
+.flint-editor::-webkit-scrollbar-thumb:active,
+.flint-preview::-webkit-scrollbar-thumb:active {
+  background: #848492;
+  background-clip: padding-box;
+}
 
 ::selection { background: rgba(255,255,255,0.08); color: var(--text); }
 

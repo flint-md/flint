@@ -201,7 +201,7 @@ export function Editor({ noteId }: { noteId: string }) {
   if (!note) return null;
 
   return (
-    <textarea ref={taRef} className="flint-editor"
+    <textarea ref={taRef} className="flint-editor flint-note-scroll"
       defaultValue={note.content}
       onChange={e => handleChange(e.target.value)}
       onKeyDown={handleKey}
